@@ -1,0 +1,27 @@
+{
+    "name": "我的扩展程序",
+    "version": "0.9",
+    "manifest_version": 3,
+    "description": "Check IP info automatically",
+    "action": {
+        "default_popup": "popup.html"
+    },
+    "host_permissions":[
+        "https://operatornet-midway.cn-northwest-1.amazonaws.cn/",
+        "https://cn-northwest-1.signin.amazonaws.cn/",
+        "https://midway-auth.aws-border.cn/"
+        
+    ],
+    "background":{
+        "service_worker":"background.js",
+        "type":"module"
+    },
+    "permissions": [
+        "tabs",
+        "alarms",
+        "storage", 
+        "activeTab", 
+        "scripting",
+        "downloads"
+    ]
+  }

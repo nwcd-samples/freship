@@ -1,0 +1,30 @@
+<html>
+    <head>
+    </head>
+    <body style="width: 500px; height: 400px; padding: 2px 2px;">
+        <h3>Welcome to FreshIP</h3>
+        <div class="container">
+            <div style="display: flex; padding: 4px 2px;">
+                <input type="file" accept=".csv" placeholder="select IP csv file" id="fileIPList"/><label for="fileIPList">Please upload IP list file</label>
+            </div>
+            <div style="display: flex; padding: 4px 2px;">
+                <input type="file" accept=".csv" placeholder="select target csv file" id="fileTarget"/><label for="fileTarget">Please upload target file </label>
+            </div>
+            <div style="display:flex; margin-top: 10px">
+                <input type="button" value="Upload Now" id="btnUpload"/> 
+                <progress id="progress" max="0" value="0" style="margin-left: 10px;">0/0</progress><label for="progress">0%</label>
+                <a id="hrefLog" href="#" style="margin-left: 20px;">Log Download</a><label for="hrefLog"> (hit me twice)</label>
+            </div>
+            
+            <div>
+                <h4>Details:</h4>             
+                <div class="detail" style="max-height: 200px;width: 100%; height: 200px;overflow-y: scroll;">             
+                </div>
+            </div>
+        </div>
+    </body>
+    <script src="papaparse.min.js"></script>
+    <!-- <script src="log4js.js" type="module"></script> -->
+    <script src="popup.js" type="module"></script>
+    
+    </html>
