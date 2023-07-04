@@ -93,6 +93,7 @@ async function tabRemovedListener (tabId,removedInfo){
     let workerTabs = await chrome.tabs.query({url:WORKER_TAB_URL});
     allIPIndex = await getNonNegativeInt(allIPIndex,'allIPIndex');
     allIPLen = await getNonNegativeInt(allIPLen,'allIPLen');
+    console.log("current allIPIndex %d, allIPLen %d",allIPIndex, allIPLen);
     if(workerTabs.length === 0 && allIPIndex < allIPLen){
         console.log('received all worker tabs response, refreshing token tab');
         await refreshToken();
@@ -166,6 +167,7 @@ chrome.runtime.onMessage.addListener(async (request,sender,sendResponse) =>{
             pushAndSaveArrayToLocalStorage(result,obj,'result');
             // add one only when current ip processed successfully
             allIPIndex++;
+            console.log('allIPIndex %d,receivedTabMessages.length on onMessage.addListener method',allIPIndex,receivedTabMessages.length);
             saveNonNegativeInt(allIPIndex,'allIPIndex');
             let resultInBackground = notUsedInBackground ? 'N':'Y';
             log('WARN','used in background ' + resultInBackground + ', used in worker tab ' + obj.used + ' for IP ' + obj.ip);
