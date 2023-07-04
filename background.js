@@ -13,8 +13,8 @@ const TABS_NUMBER = 20; // 20
 // adfs home url:https://operatornet.nwcdcloud.cn
 //https://operatornet-midway.cn-northwest-1.amazonaws.cn
 const OPERATORNET_HOME_URL = "https://operatornet.cn-northwest-1.amazonaws.cn";
-const WORKER_URL_PATH = '/console/operator/account-lookup-by-ip';
-const WORKER_TAB_URL = OPERATORNET_HOME_URL + WORKER_URL_PATH;
+const WORKER_TAB_URL_PATH = '/console/operator/account-lookup-by-ip';
+const WORKER_TAB_URL = OPERATORNET_HOME_URL + WORKER_TAB_URL_PATH;
 
 chrome.runtime.onInstalled.addListener(() => {
     console.log('clear all local storage');
@@ -23,7 +23,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // this event doesn't support filter
 async function tabOnUpdateListener(tabId,changedInfo,tabInfo){
-    // const WORKER_URL_PATH = '/console/operator/account-lookup-by-ip';
+    // const WORKER_TAB_URL_PATH = '/console/operator/account-lookup-by-ip';
     const TOKEN_URL_PATH = '/console/operator';
     // const TOKEN_URL = 'https://operatornet-midway.cn-northwest-1.amazonaws.cn/';
     const MIDWAY_URL = 'midway-auth.aws-border.cn';
@@ -36,7 +36,7 @@ async function tabOnUpdateListener(tabId,changedInfo,tabInfo){
     else if(tabUrl.pathname === TOKEN_URL_PATH && changedInfo.status === 'complete'){   
         allIP = await getArrayFromLocalStorage(allIP,'allIP');
         allIPIndex = await getNonNegativeInt(allIPIndex,'allIPIndex');
-        console.log('background: token tab refreshed, status for last IP : allIP.length %d, allIPIndex %d, receivedTabMessages.length %d, searchInfos.length %'
+        console.log('background: token tab refreshed, status for last IP : allIP.length %d, allIPIndex %d, receivedTabMessages.length %d, searchInfos.length %d'
         ,allIP.length, allIPIndex,receivedTabMessages.length,searchInfos.length);
         log('INFO','token tab refreshed, status for last IP ' +allIP[allIPIndex-1] + ': allIP length ' + allIP.length 
         + ',receivedTabMessages.length ' + receivedTabMessages.length + ', current allIPIndex ' + allIPIndex);
@@ -60,7 +60,7 @@ async function tabOnUpdateListener(tabId,changedInfo,tabInfo){
             console.log('background: first worker tab created %O for ip %s. current state: searchInfoIndex %d, searchInfos %O',firstWorkerTab,nextIP,searchInfoIndex,searchInfos);
         }
     }
-    else if(tabUrl.pathname === WORKER_URL_PATH && changedInfo.status === 'complete'){
+    else if(tabUrl.pathname === WORKER_TAB_URL_PATH && changedInfo.status === 'complete'){
         searchInfos = await getArrayFromLocalStorage(searchInfos,'searchInfos');
         allIPIndex = await getNonNegativeInt(allIPIndex,'allIPIndex');
         log('INFO','ready to assign ip info to tab ' + tabId + '. current status: allIPIndex' 
