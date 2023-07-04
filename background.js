@@ -10,7 +10,11 @@ let logger = new Array();
 let receivedTabMessages = new Array();
 let accountsPerIP = new Set();
 const TABS_NUMBER = 20; // 20
-const WORKER_TAB_URL = 'https://operatornet-midway.cn-northwest-1.amazonaws.cn/console/operator/account-lookup-by-ip';
+// adfs home url:https://operatornet.nwcdcloud.cn
+//https://operatornet-midway.cn-northwest-1.amazonaws.cn
+const OPERATORNET_HOME_URL = "https://operatornet.cn-northwest-1.amazonaws.cn";
+const WORKER_URL_PATH = '/console/operator/account-lookup-by-ip';
+const WORKER_TAB_URL = OPERATORNET_HOME_URL + WORKER_URL_PATH;
 
 chrome.runtime.onInstalled.addListener(() => {
     console.log('clear all local storage');
@@ -19,7 +23,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
 // this event doesn't support filter
 async function tabOnUpdateListener(tabId,changedInfo,tabInfo){
-    const WORKER_URL_PATH = '/console/operator/account-lookup-by-ip';
+    // const WORKER_URL_PATH = '/console/operator/account-lookup-by-ip';
     const TOKEN_URL_PATH = '/console/operator';
     // const TOKEN_URL = 'https://operatornet-midway.cn-northwest-1.amazonaws.cn/';
     const MIDWAY_URL = 'midway-auth.aws-border.cn';
@@ -85,11 +89,12 @@ async function tabOnUpdateListener(tabId,changedInfo,tabInfo){
 chrome.tabs.onUpdated.addListener(tabOnUpdateListener);
 
 async function tabRemovedListener (tabId,removedInfo){
-    const WORKER_TAB_URL = 'https://operatornet-midway.cn-northwest-1.amazonaws.cn/console/operator/account-lookup-by-ip';
+    // const WORKER_TAB_URL = 'https://operatornet-midway.cn-northwest-1.amazonaws.cn/console/operator/account-lookup-by-ip';
     let workerTabs = await chrome.tabs.query({url:WORKER_TAB_URL});
     allIPIndex = await getNonNegativeInt(allIPIndex,'allIPIndex');
     allIPLen = await getNonNegativeInt(allIPLen,'allIPLen');
     if(workerTabs.length === 0 && allIPIndex < allIPLen){
+        console.log('received all worker tabs response, refreshing token tab');
         await refreshToken();
     }
 }
@@ -179,14 +184,19 @@ chrome.runtime.onMessage.addListener(async (request,sender,sendResponse) =>{
 
 async function refreshToken(){
     // temp begin
-    const TOKEN_TAB_URL_PATTERN = 'https://operatornet-midway.cn-northwest-1.amazonaws.cn/console/operator*';
-    const TOKEN_TAB_URL_HOME = 'https://operatornet-midway.cn-northwest-1.amazonaws.cn';
-    let tokenTabs = await chrome.tabs.query({url:TOKEN_TAB_URL_PATTERN});
+    let TOKEN_TAB_URL_PATH_PATTERN = '/console/operator*';
+    let adsfPattern = OPERATORNET_HOME_URL + TOKEN_TAB_URL_PATH_PATTERN;
+    let midwayPattern = 'https://operatornet-midway.cn-northwest-1.amazonaws.cn' + TOKEN_TAB_URL_PATH_PATTERN;
+    // midway authentication will be replaced by adfs authentication, so we use patterns array cover both cases
+    let patterns = [midwayPattern,adsfPattern];
+    // const TOKEN_TAB_URL_HOME = 'https://operatornet-midway.cn-northwest-1.amazonaws.cn';
+    let tokenTabs = await chrome.tabs.query({url:patterns});
+    console.log('current token tabs', tokenTabs);
     if(tokenTabs.length > 0){
         let tokenTab = tokenTabs[0];
         // tokenTabId = tokenTabId.id;
         console.log('background: found token tab %O and will force to refresh token',tokenTab);
-        // log('INFO','background: found token tab ' + tokenTab.id + ' and will force to refresh token');
+        log('INFO','background: found token tab ' + tokenTab.url + ' and will force to refresh token');
         chrome.scripting.executeScript({
             target: {tabId: tokenTab.id},
             // files:['fillupIPScripting.js'],
@@ -197,11 +207,12 @@ async function refreshToken(){
                 // MUST access TOKEN_TAB_URL_HOME to refresh
                 window.location.href = refreshTokenHome;
             },
-            args:[TOKEN_TAB_URL_HOME]
+            args:[OPERATORNET_HOME_URL]
         });
     } else{        
         try{
-            let tokenTab = await chrome.tabs.create({url:TOKEN_TAB_URL_HOME});
+            // let tokenTab = await chrome.tabs.create({url:WORKER_TAB_URL});//OPERATORNET_HOME_URL
+            let tokenTab = await chrome.tabs.create({url:OPERATORNET_HOME_URL});//OPERATORNET_HOME_URL
             // tokenTabId = tokenTab.id;
             console.warn('background: since no token tab found, created one %O to refresh token',tokenTab);
             log('WARN','background: since no token tab found, created one '+ tokenTab.id +' to refresh token');
