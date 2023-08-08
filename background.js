@@ -1,9 +1,7 @@
 let result = new Array();
 let searchInfos = new Array();
 let searchInfoIndex = 0;
-// let allIPLen = 0;
 let allIP = new Array();
-// let allIPIndex = 0;
 let targetAccounts = new Array();
 let accountId = "";
 let logger = new Array();
@@ -33,8 +31,8 @@ async function tabOnUpdateListener(tabId,changedInfo,tabInfo){
     result = await getArrayFromLocalStorage(result,'result');
     allIP = await getArrayFromLocalStorage(allIP,'allIP');
     currentState = await getObjFromLocalStorage('currentState');
-    console.log('currentState %O on tabOnUpdateListener',currentState);
-    if(currentState){
+    console.log('currentState %O,result %O, allIP %O on tabOnUpdateListener',currentState,result,allIP);
+    if(result){
         let ipIndex = currentState.ipIndex;
         let allIPLen = currentState.allIPLen;
         if(tabUrl.host === MIDWAY_URL){
@@ -60,6 +58,17 @@ async function tabOnUpdateListener(tabId,changedInfo,tabInfo){
                 exportCSV(tabId,result);
             }else{
                 let nextIP = allIP[ipIndex];
+                // incase the ipIndex variable unloaded, add the check in result object
+                // to see if the ip processed
+                if(result.length > ipIndex && result[ipIndex].ip === nextIP){
+                    let actual = currentState.ipIndex;
+                    currentState.ipIndex += 1;
+                    ipIndex = currentState.ipIndex;
+                    nextIP = allIP[ipIndex];
+                    console.warn('Found currentState.ipIndex unloaded, should be %d, but is %d',ipIndex,actual);
+                    log('WARN','Found currentState.ipIndex unloaded, should be ' + ipIndex + ', but is ' + actual);
+                    chrome.storage.local.set({currentState:currentState});
+                }
                 log('INFO','begin to process ip ' + nextIP + ' . current status : ipIndex ' 
                 + ipIndex + ', allIP length ' + allIP.length);
                 createSearchInfo(nextIP,accountId,targetAccounts);
@@ -94,7 +103,7 @@ async function tabOnUpdateListener(tabId,changedInfo,tabInfo){
             console.log("Current status: tab %O, changeInfo: %O",tabInfo, changedInfo);
         }
     } else {
-        console.error("currentState on tabOnUpdateListener: %O is null, process interrupted",currentState);
+        console.error("result %O on tabOnUpdateListener is null, process interrupted",currentState);
     }
 }
 
@@ -125,17 +134,6 @@ chrome.runtime.onMessage.addListener(async (request,sender,sendResponse) =>{
     console.log('background: received message %O from %O',request,sender);
     if(request === 'uploaded'){
         sendResponse('copy');
-        // let localAllIP = await chrome.storage.local.get('allIP');
-        // let localAllIPLen = await chrome.storage.local.get('allIPLen');
-        // let localTargetAccounts = await chrome.storage.local.get('targetAccounts');
-        // let localAccountId = await chrome.storage.local.get('accountId');
-        // let localIPIndex = await chrome.storage.local.get('ipIndex');
-
-        // allIP = localAllIP.allIP;
-        // let allIPLen = localAllIPLen.allIPLen;
-        // // let ipIndex = localIPIndex.ipIndex;
-        // targetAccounts = localTargetAccounts.targetAccounts;
-        // accountId = localAccountId.accountId;
         allIP = await getArrayFromLocalStorage(allIP,'allIP');
         targetAccounts = await getArrayFromLocalStorage(targetAccounts,'targetAccounts');
         accountId = await getObjFromLocalStorage('accountId');
@@ -191,21 +189,9 @@ chrome.runtime.onMessage.addListener(async (request,sender,sendResponse) =>{
             pushAndSaveArrayToLocalStorage(result,obj,'result');
             if(currentState){
                 // get current ip index from worker tabs
-                // we store allIPIndex into worker tabs instead of localstorage
-                // let ipIndex = currentState.ipIndex;
-                // let allIPLen = currentState.allIPLen;
-                // add one only when current ip processed successfully
-                // allIPIndex = await getNonNegativeInt(allIPIndex,'allIPIndex');
                 currentState.ipIndex += 1;
                 console.log('ipIndex %d,receivedTabMessages.length %d on onMessage.addListener method',currentState.ipIndex,receivedTabMessages.length);
                 chrome.storage.local.set({currentState: currentState});
-                // saveNonNegativeInt(allIPIndex,'allIPIndex');
-                // chrome.storage.local.get('allIPIndex',val=>{
-                //     allIPIndex = parseInt(val);
-                //     allIPIndex++;
-                //     console.warn("allIPIndex %d updated ",allIPIndex);
-                //     chrome.storage.local.set({'allIPIndex': allIPIndex});
-                // });
                 let resultInBackground = notUsedInBackground ? 'N':'Y';
                 log('WARN','used in background ' + resultInBackground + ', used in worker tab ' + obj.used + ' for IP ' + obj.ip);
                 strReveivedMessages = '';
@@ -509,9 +495,6 @@ function clear(){
                                     console.log('tab %d: collected response successfully after retry ,sent message %O',tabId,message);
                                     window.close();
                                 });
-                                // clearInterval(retryInterval);
-                                // console.log('tab %d: collected response successfully after retry ,sent message %O',tabId,message);
-                                // window.close();
                             } catch(e){
                                 retry++;
                             }
@@ -551,9 +534,6 @@ function clear(){
                                         console.log('tab %d: collected response successfully after retry ,sent message %O',tabId,message);
                                         window.close();
                                     });
-                                    // clearInterval(retryInterval);
-                                    // console.log('tab %d: collected response successfully after retry ,sent message %O',tabId,message);
-                                    // window.close();
                                 } catch(e){
                                     retry++;
                                 }
@@ -602,9 +582,7 @@ function clear(){
                 let flag = notUsed? 'N':'Y';
                 const message = {accountId:accountId,ip:ip,tabId:tabId,used:flag,succeeded:true,rows:rows};
                 try{
-                    // port.postMessage(message);
-                    // console.log('tab %d: collected response successfully ,sent message %O',tabId,message);
-                    // // window.close();
+
                     let port = chrome.runtime.connect({name:'tab_'+tabId});
                     port.postMessage(message);
                     console.log('tab %d: collected response successfully ,sent message %O',tabId,message);
@@ -630,9 +608,6 @@ function clear(){
                                     console.log('tab %d: collected response successfully after retry ,sent message %O',tabId,message);
                                     window.close();
                                 });
-                                // clearInterval(retryInterval);
-                                // console.log('tab %d: collected response successfully after retry ,sent message %O',tabId,message);
-                                // window.close();
                             } catch(e){
                                 console.warn("When retrying occurred error %O, will retry again",e);
                                 retry++;
@@ -697,6 +672,7 @@ function log(level,msg){
 }
 
 function pushAndSaveArrayToLocalStorage(listObj,newItem,objKey){
+    console.log("New item %O added to %O with key %s",newItem,listObj,objKey)
     listObj.push(newItem);
     let obj = new Object();
     obj[objKey] = listObj;
