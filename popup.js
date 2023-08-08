@@ -5,17 +5,19 @@
  */
 
  
- let localAllIPLen = await chrome.storage.local.get('allIPLen');
+ let localAllIP = await chrome.storage.local.get('allIP');
  let localResult = await chrome.storage.local.get('result');
- let allIPLen = localAllIPLen.allIPLen;
+ let allIP = localAllIP.allIP;
  let result = localResult.result;
 
  let detailDiv = document.querySelector('div.detail');
-if(allIPLen && result){  
-    console.log('popup: allIPLen %d, result %O',allIPLen,result);
+if(allIP && result){  
+    let allIPLen = allIP.length;
+    let resultLen = result.length;
+    console.log('popup: allIPLen %d, result %O',allIPLen,resultLen);
     document.querySelector('progress').max = allIPLen;
-    document.querySelector('progress').value = result.length;
-    document.querySelector('label[for="progress"]').innerText = result.length +'/'+ allIPLen;
+    document.querySelector('progress').value = resultLen;
+    document.querySelector('label[for="progress"]').innerText = resultLen +'/'+ allIPLen;
     detailDiv.innerHTML = '';
     let ul = document.createElement('ul');
     result.forEach(item=>{
@@ -46,12 +48,16 @@ btnUpload.addEventListener("click", async()=> {
             let accountId = ipListFileName.substr(0,ipListFileName.indexOf('.'));
             chrome.storage.local.set({accountId:accountId});
             let allIP,targetAccounts;
+            let ipIndex = 0;
             Papa.parse(ipListFile.files[0], {
                 header:true,
                 complete: function(results) {
                     allIP = results.data.filter(v => {return v.ip && v.ip.trim()!=''}).map((v) => {return v.ip});
                     chrome.storage.local.set({allIP:allIP});
-                    chrome.storage.local.set({allIPLen:allIP.length});
+                    // chrome.storage.local.set({allIPLen:allIP.length});
+                    // chrome.storage.local.set({ipIndex: ipIndex});
+                    let currentState = {'ipIndex': 0, 'allIPLen': allIP.length};
+                    chrome.storage.local.set({currentState: currentState});
                     console.log('popup: data in ip list csv:',allIP);
                     // store uploaded ip list in case extension crashed
                     // chrome.storage.sync.set({allIP});

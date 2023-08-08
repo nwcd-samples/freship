@@ -1,14 +1,15 @@
 let result = new Array();
 let searchInfos = new Array();
 let searchInfoIndex = 0;
-let allIPLen = 0;
+// let allIPLen = 0;
 let allIP = new Array();
-let allIPIndex = 0;
+// let allIPIndex = 0;
 let targetAccounts = new Array();
 let accountId = "";
 let logger = new Array();
 let receivedTabMessages = new Array();
 let accountsPerIP = new Set();
+let currentState = null;
 const TABS_NUMBER = 20; // 20
 // adfs home url:https://operatornet.nwcdcloud.cn
 //https://operatornet-midway.cn-northwest-1.amazonaws.cn
@@ -29,74 +30,90 @@ async function tabOnUpdateListener(tabId,changedInfo,tabInfo){
     const MIDWAY_URL = 'midway-auth.aws-border.cn';
     // since the lookup url may end with ?#, so we use url path name to check if it's expected url
     let tabUrl = new URL(tabInfo.url);
-    if(tabUrl.host === MIDWAY_URL){
-        console.log('background: session exipred please login first');
-        log('WARN','session exipred please login first. tab url ' + tabInfo.url);
-    }
-    else if(tabUrl.pathname === TOKEN_URL_PATH && changedInfo.status === 'complete'){   
-        allIP = await getArrayFromLocalStorage(allIP,'allIP');
-        allIPIndex = await getNonNegativeInt(allIPIndex,'allIPIndex');
-        console.log('background: token tab refreshed, status for last IP : allIP.length %d, allIPIndex %d, receivedTabMessages.length %d, searchInfos.length %d'
-        ,allIP.length, allIPIndex,receivedTabMessages.length,searchInfos.length);
-        log('INFO','token tab refreshed, status for last IP ' +allIP[allIPIndex-1] + ': allIP length ' + allIP.length 
-        + ',receivedTabMessages.length ' + receivedTabMessages.length + ', current allIPIndex ' + allIPIndex);
-        // not upload files yet
-        if(allIP.length === 0){
-            log('WARN','allIP is empty. user maybe not upload files or allIP lost in runtime');
-            console.log('background: allIP is empty. user maybe not upload files or allIP lost in runtime');
-            return;
-        };
-        if(allIPIndex === allIP.length){
-            result = await getArrayFromLocalStorage(result,'result');
-            console.log('background: all IP processed, begin to export csv. result ',result);
-            log('INFO','tabs.onUpdated.addListener: all IP processed, begin to export csv ' + result.length);
-            exportCSV(tabId,result);
-        }else{
-            let nextIP = allIP[allIPIndex];
-            log('INFO','begin to process ip ' + nextIP + ' . current status : allIPIndex ' 
-            + allIPIndex + ', allIP length ' + allIP.length);
-            createSearchInfo(nextIP,accountId,targetAccounts);
-            let firstWorkerTab = await chrome.tabs.create({url:WORKER_TAB_URL});
-            console.log('background: first worker tab created %O for ip %s. current state: searchInfoIndex %d, searchInfos %O',firstWorkerTab,nextIP,searchInfoIndex,searchInfos);
+    result = await getArrayFromLocalStorage(result,'result');
+    allIP = await getArrayFromLocalStorage(allIP,'allIP');
+    currentState = await getObjFromLocalStorage('currentState');
+    console.log('currentState %O on tabOnUpdateListener',currentState);
+    if(currentState){
+        let ipIndex = currentState.ipIndex;
+        let allIPLen = currentState.allIPLen;
+        if(tabUrl.host === MIDWAY_URL){
+            console.log('background: session exipred please login first');
+            log('WARN','session exipred please login first. tab url ' + tabInfo.url);
         }
-    }
-    else if(tabUrl.pathname === WORKER_TAB_URL_PATH && changedInfo.status === 'complete'){
-        searchInfos = await getArrayFromLocalStorage(searchInfos,'searchInfos');
-        allIPIndex = await getNonNegativeInt(allIPIndex,'allIPIndex');
-        log('INFO','ready to assign ip info to tab ' + tabId + '. current status: allIPIndex' 
-        + allIPIndex + ', searchInfoIndex ' + searchInfoIndex)
-        let datePartition = searchInfos[searchInfoIndex++];
-        datePartition.tabId = tabId;
-        console.log('background: ready to assign ip search info %O to tab %d. ' 
-        + 'current status: searchInfos %O, searchInfoIndex %d',datePartition,tabId,searchInfos,searchInfoIndex);
-
-        chrome.scripting.executeScript({
-            target: {tabId: tabId},
-            func: searchByPartitionFunc,
-            args:[datePartition]
-        });
-        log('INFO','assigned ip' + datePartition.ip + 'to tab ' + datePartition.tabId + '. current status: searchInfos.length '
-        + searchInfos.length + ', searchInfoIndex ' + searchInfoIndex + ',allIPIndex '+allIPIndex);
-        // create next worker tab
-        delayCounter(1000000000);
-        if(searchInfoIndex < TABS_NUMBER){
-            let nextWorkerTab = await chrome.tabs.create({url: WORKER_TAB_URL});
-            console.log('background: next worker tab created %O. current state: searchInfoIndex %d, searchInfos %O',nextWorkerTab,searchInfoIndex,searchInfos);
-            // log('INFO','next worker tab created. current status: tab id' + nextWorkerTab.id +',searchInfos.length '+ searchInfos.length + ', searchInfoIndex ' + searchInfoIndex);
+        else if(tabUrl.pathname === TOKEN_URL_PATH && changedInfo.status === 'complete'){   
+            
+            // allIPIndex = await getNonNegativeInt(allIPIndex,'allIPIndex');
+            console.log('background: token tab refreshed, status for last IP : allIP.length %d, ipIndex %d, receivedTabMessages.length %d, searchInfos.length %d'
+            ,allIP.length, ipIndex,receivedTabMessages.length,searchInfos.length);
+            log('INFO','token tab refreshed, status for last IP ' +allIP[ipIndex-1] + ': allIP length ' + allIP.length 
+            + ',receivedTabMessages.length ' + receivedTabMessages.length + ', current ipIndex ' + ipIndex);
+            // not upload files yet
+            if(allIP.length === 0){
+                log('WARN','allIP is empty. user maybe not upload files or allIP lost in runtime');
+                console.log('background: allIP is empty. user maybe not upload files or allIP lost in runtime');
+                return;
+            };
+            if(ipIndex === allIP.length){               
+                console.log('background: all IP processed, begin to export csv. result ',result);
+                log('INFO','tabs.onUpdated.addListener: all IP processed, begin to export csv ' + result.length);
+                exportCSV(tabId,result);
+            }else{
+                let nextIP = allIP[ipIndex];
+                log('INFO','begin to process ip ' + nextIP + ' . current status : ipIndex ' 
+                + ipIndex + ', allIP length ' + allIP.length);
+                createSearchInfo(nextIP,accountId,targetAccounts);
+                let firstWorkerTab = await chrome.tabs.create({url:WORKER_TAB_URL});
+                console.log('background: first worker tab created %O for ip %s. current state: searchInfoIndex %d, searchInfos %O',firstWorkerTab,nextIP,searchInfoIndex,searchInfos);
+            }
         }
+        else if(tabUrl.pathname === WORKER_TAB_URL_PATH && changedInfo.status === 'complete'){
+            searchInfos = await getArrayFromLocalStorage(searchInfos,'searchInfos');
+            log('INFO','ready to assign ip info to tab ' + tabId + '. current status: ipIndex' 
+            + ipIndex + ', searchInfoIndex ' + searchInfoIndex);
+            let datePartition = searchInfos[searchInfoIndex++];
+            datePartition.tabId = tabId;
+            console.log('background: ready to assign ip search info %O to tab %d. ' 
+            + 'current status: searchInfos %O, searchInfoIndex %d',datePartition,tabId,searchInfos,searchInfoIndex);
+    
+            chrome.scripting.executeScript({
+                target: {tabId: tabId},
+                func: searchByPartitionFunc,
+                args:[datePartition]
+            });
+            log('INFO','assigned ip' + datePartition.ip + 'to tab ' + datePartition.tabId + '. current status: searchInfos.length '
+            + searchInfos.length + ', searchInfoIndex ' + searchInfoIndex + ',ipIndex ' + ipIndex);
+            // create next worker tab
+            delayCounter(1000000000);
+            if(searchInfoIndex < TABS_NUMBER){
+                let nextWorkerTab = await chrome.tabs.create({url: WORKER_TAB_URL});
+                console.log('background: next worker tab created %O. current state: searchInfoIndex %d, searchInfos %O',nextWorkerTab,searchInfoIndex,searchInfos);
+                // log('INFO','next worker tab created. current status: tab id' + nextWorkerTab.id +',searchInfos.length '+ searchInfos.length + ', searchInfoIndex ' + searchInfoIndex);
+            }
+        } else {
+            console.log("Current status: tab %O, changeInfo: %O",tabInfo, changedInfo);
+        }
+    } else {
+        console.error("currentState on tabOnUpdateListener: %O is null, process interrupted",currentState);
     }
 }
+
 chrome.tabs.onUpdated.addListener(tabOnUpdateListener);
 
 async function tabRemovedListener (tabId,removedInfo){
     // const WORKER_TAB_URL = 'https://operatornet-midway.cn-northwest-1.amazonaws.cn/console/operator/account-lookup-by-ip';
     let workerTabs = await chrome.tabs.query({url:WORKER_TAB_URL});
-    allIPIndex = await getNonNegativeInt(allIPIndex,'allIPIndex');
-    allIPLen = await getNonNegativeInt(allIPLen,'allIPLen');
-    console.log("current allIPIndex %d, allIPLen %d",allIPIndex, allIPLen);
-    if(workerTabs.length === 0 && allIPIndex < allIPLen){
-        console.log('received all worker tabs response, refreshing token tab');
-        await refreshToken();
+    currentState = await getObjFromLocalStorage('currentState');
+    if(currentState){
+        let ipIndex = currentState.ipIndex;
+        let allIPLen = currentState.allIPLen;
+        console.log("tabRemovedListener: current ipIndex %d, allIPLen %d",ipIndex, allIPLen);
+        if(workerTabs.length === 0 && ipIndex < allIPLen){
+            console.log('received all worker tabs response, refreshing token tab');
+            await refreshToken();
+        }
+    }else{
+        console.error("currentState on tabRemovedListener: %O is null, process interrupted",currentState);
     }
 }
 chrome.tabs.onRemoved.addListener(tabRemovedListener);
@@ -108,17 +125,22 @@ chrome.runtime.onMessage.addListener(async (request,sender,sendResponse) =>{
     console.log('background: received message %O from %O',request,sender);
     if(request === 'uploaded'){
         sendResponse('copy');
-        let localAllIP = await chrome.storage.local.get('allIP');
-        let localAllIPLen = await chrome.storage.local.get('allIPLen');
-        let localTargetAccounts = await chrome.storage.local.get('targetAccounts');
-        let localAccountId = await chrome.storage.local.get('accountId');
+        // let localAllIP = await chrome.storage.local.get('allIP');
+        // let localAllIPLen = await chrome.storage.local.get('allIPLen');
+        // let localTargetAccounts = await chrome.storage.local.get('targetAccounts');
+        // let localAccountId = await chrome.storage.local.get('accountId');
+        // let localIPIndex = await chrome.storage.local.get('ipIndex');
 
-        allIP = localAllIP.allIP;
-        allIPLen = localAllIPLen.allIPLen;
-        targetAccounts = localTargetAccounts.targetAccounts;
-        accountId = localAccountId.accountId;
-        console.log('background: retrieved message from local storage: allIP %O, targetAccounts %O, accountId %s and allIPLen %d',allIP,targetAccounts,accountId,allIPLen);
-        log('INFO','retrieved message from local storage: allIP '+allIP.length + ', targetAccounts '+targetAccounts.length + ', accountId '+accountId + ', allIPLen '+allIPLen);
+        // allIP = localAllIP.allIP;
+        // let allIPLen = localAllIPLen.allIPLen;
+        // // let ipIndex = localIPIndex.ipIndex;
+        // targetAccounts = localTargetAccounts.targetAccounts;
+        // accountId = localAccountId.accountId;
+        allIP = await getArrayFromLocalStorage(allIP,'allIP');
+        targetAccounts = await getArrayFromLocalStorage(targetAccounts,'targetAccounts');
+        accountId = await getObjFromLocalStorage('accountId');
+        console.log('background: retrieved message from local storage: allIP %O, targetAccounts %O, accountId %s',allIP,targetAccounts,accountId);
+        log('INFO','retrieved message from local storage: allIP '+allIP.length + ', targetAccounts '+targetAccounts.length + ', accountId '+accountId);
         await refreshToken();
     }
 });
@@ -126,15 +148,17 @@ chrome.runtime.onMessage.addListener(async (request,sender,sendResponse) =>{
 /**
  * get worker tab response
  */
- let onConnectListener = chrome.runtime.onConnect.addListener(port => {
-   
+ chrome.runtime.onConnect.addListener(port => {
+    console.log('Setup a new connection in port %O',port);
+    port.postMessage({tabId: port.name, msg:"received your message"});
     port.onMessage.addListener(async msg =>{
         // DO NOT use local storage to keep receivedTabMessages, it may cause its value doesn't update timely issue
         // actually for any variable which's value changed frequently, DO NOT persist it into local storage
+        currentState = await getObjFromLocalStorage('currentState');
         receivedTabMessages.push(msg);
-        console.log('background: receivedTabMessages %O after receiving a tab response %O',receivedTabMessages,msg);
+        console.log('background: currentState: %O,receivedTabMessages: %O after receiving a tab response %O',currentState,receivedTabMessages,msg);
         log('INFO','received new message: tabId ' + msg.tabId +', ip ' + msg.ip + ', succeeded '+ msg.succeeded + 
-        '. current receivedTabMessages.length ' + receivedTabMessages.length + ', allIPIndex ' + allIPIndex + ',allIP.length ' + allIP.length);
+        '. current receivedTabMessages.length ' + receivedTabMessages.length + ',allIP.length ' + allIP.length);
         let accounts = msg.rows;
         if(accounts && accounts.length > 0){
             accounts.forEach((v)=>accountsPerIP.add(v));
@@ -160,25 +184,41 @@ chrome.runtime.onMessage.addListener(async (request,sender,sendResponse) =>{
             let obj = null;
             log('INFO','notUsedItems length ' + notUsedItems.length);
             if(notUsedItems && notUsedItems.length === TABS_NUMBER){
-                obj = {ip:ip,used: 'N'};               
+                obj = {ip:ip,used: 'N'};
             } else{
                 obj = {ip:ip,used: 'Y'};
             }
             pushAndSaveArrayToLocalStorage(result,obj,'result');
-            // add one only when current ip processed successfully
-            allIPIndex++;
-            console.log('allIPIndex %d,receivedTabMessages.length on onMessage.addListener method',allIPIndex,receivedTabMessages.length);
-            saveNonNegativeInt(allIPIndex,'allIPIndex');
-            let resultInBackground = notUsedInBackground ? 'N':'Y';
-            log('WARN','used in background ' + resultInBackground + ', used in worker tab ' + obj.used + ' for IP ' + obj.ip);
-            strReveivedMessages = '';
-            strRowsPerTab = '';
-            arrAccounts.length = 0;
-            arrReceivedMessages.length = 0;
-            log('INFO','cleared resource for ip ' + msg.ip +', begin to process the next ip');
-            console.log('cleared resource for ip %s, begin to process the next ip',ip);
-            // refresh token for next ip
-            await refreshToken();
+            if(currentState){
+                // get current ip index from worker tabs
+                // we store allIPIndex into worker tabs instead of localstorage
+                // let ipIndex = currentState.ipIndex;
+                // let allIPLen = currentState.allIPLen;
+                // add one only when current ip processed successfully
+                // allIPIndex = await getNonNegativeInt(allIPIndex,'allIPIndex');
+                currentState.ipIndex += 1;
+                console.log('ipIndex %d,receivedTabMessages.length %d on onMessage.addListener method',currentState.ipIndex,receivedTabMessages.length);
+                chrome.storage.local.set({currentState: currentState});
+                // saveNonNegativeInt(allIPIndex,'allIPIndex');
+                // chrome.storage.local.get('allIPIndex',val=>{
+                //     allIPIndex = parseInt(val);
+                //     allIPIndex++;
+                //     console.warn("allIPIndex %d updated ",allIPIndex);
+                //     chrome.storage.local.set({'allIPIndex': allIPIndex});
+                // });
+                let resultInBackground = notUsedInBackground ? 'N':'Y';
+                log('WARN','used in background ' + resultInBackground + ', used in worker tab ' + obj.used + ' for IP ' + obj.ip);
+                strReveivedMessages = '';
+                strRowsPerTab = '';
+                arrAccounts.length = 0;
+                arrReceivedMessages.length = 0;
+                log('INFO','cleared resource for ip ' + msg.ip +', begin to process the next ip');
+                console.log('cleared resource for ip %s, begin to process the next ip',ip);
+                // refresh token for next ip
+                await refreshToken();
+            } else{
+                console.error("currentState on addConnectionListener: %O is null, process interrupted",currentState);
+            }
         }
     });
 
@@ -197,12 +237,12 @@ async function refreshToken(){
     if(tokenTabs.length > 0){
         let tokenTab = tokenTabs[0];
         // tokenTabId = tokenTabId.id;
-        console.log('background: found token tab %O and will force to refresh token',tokenTab);
+        console.log('background: found token tab %O and will force to refresh token:',tokenTab);
         log('INFO','background: found token tab ' + tokenTab.url + ' and will force to refresh token');
         chrome.scripting.executeScript({
             target: {tabId: tokenTab.id},
             // files:['fillupIPScripting.js'],
-            func: async (refreshTokenHome) =>{
+            func: (refreshTokenHome) =>{
                 // force to refresh token. please note, accessing below url will NOT refresh code
                 // https://operatornet-midway.cn-northwest-1.amazonaws.cn/console/operator
                 // even it's the OperatorNet home page
@@ -226,7 +266,7 @@ async function refreshToken(){
 }
 
 function createSearchInfo(ip,curAccountId,curTargetAccounts){
-    receivedTabMessages.length = 0;
+    // receivedTabMessages.length = 0;
     searchInfos.length = 0;
     searchInfoIndex = 0;
     accountsPerIP.clear();
@@ -276,18 +316,19 @@ function exportCSV(tabId,items){
 function clear(){
     searchInfos.length = 0;
     searchInfoIndex = 0;
-    allIPLen = 0;
+    // allIPLen = 0;
     allIP.length = 0;
-    allIPIndex = 0;
+    // allIPIndex = 0;
     targetAccounts.length = 0;
-    receivedTabMessages.length = 0;
+    // receivedTabMessages.length = 0;
     logger.length = 0;
     accountId = "";
     accountsPerIP.clear();
     chrome.storage.local.clear();
-    chrome.tabs.onRemoved.removeListener(tabRemovedListener);
-    chrome.tabs.onUpdated.removeListener(tabOnUpdateListener);
+    // chrome.tabs.onRemoved.removeListener(tabRemovedListener);
+    // chrome.tabs.onUpdated.removeListener(tabOnUpdateListener);
     result.length = 0;
+    chrome.storage.local.clear();
 }
 
 /**
@@ -337,6 +378,7 @@ function clear(){
     let localEnd = new Date(datePartition.utcEnd);
     let tabId = datePartition.tabId;
     let ip = datePartition.ip;
+    // let ipIndex = datePartition.curIPIndex;
     let lastTab = datePartition.lastTab;
     let accountId = datePartition.accountId;
     let targetAccounts = datePartition.targetAccounts;
@@ -430,7 +472,7 @@ function clear(){
     let scanStartTime = Date.now();
     const MILLIONSECONDS_OF_10_MINUTES = 600000; // 10 minutes 1000 * 60 * 10 milliseconds for production environment
     let retryForError = 0;
-    let port = chrome.runtime.connect({name:'tab_'+tabId});
+    
     let interval = setInterval(() => {
         let errorDiv = document.querySelector(ERROR_DIV_CLASS);
         let loadingTag = document.querySelector(FORMAL_LOADING_TAG);
@@ -443,9 +485,14 @@ function clear(){
                 const message = {accountId:accountId,ip:ip,tabId:tabId,used:true,succeeded:false};
                 
                 try{
-                    port.postMessage(message);
                     console.log('tab %d: found some error, consider current tab processed failed ,sent message %O',message);
-                    window.close();
+                    let port = chrome.runtime.connect({name:'tab_'+tabId});
+                    port.postMessage(message);
+                    port.onMessage.addListener((bgmsg)=>{
+                        console.log("Received background message %O, can close window now",bgmsg);
+                        window.close();
+                    });
+                    // window.close();
                 }catch(err){
                     let retry = 0;
                     let retryInterval = setInterval(()=>{
@@ -456,9 +503,15 @@ function clear(){
                             try{
                                 let retryPort = chrome.runtime.connect({name:'tab_'+tabId});
                                 retryPort.postMessage(message);
-                                clearInterval(retryInterval);
-                                console.log('tab %d: collected response successfully after retry ,sent message %O',tabId,message);
-                                window.close();
+                                retryPort.onMessage.addListener((bgmsg)=>{
+                                    console.log("Received background message %O",bgmsg);
+                                    clearInterval(retryInterval);
+                                    console.log('tab %d: collected response successfully after retry ,sent message %O',tabId,message);
+                                    window.close();
+                                });
+                                // clearInterval(retryInterval);
+                                // console.log('tab %d: collected response successfully after retry ,sent message %O',tabId,message);
+                                // window.close();
                             } catch(e){
                                 retry++;
                             }
@@ -474,9 +527,14 @@ function clear(){
                     clearInterval(interval);
                     const message = {accountId:accountId,ip:ip,tabId:tabId,used:true,succeeded:false};
                     try{
+                        let port = chrome.runtime.connect({name:'tab_'+tabId});
                         port.postMessage(message);
                         console.log('tab %d: timed out, consider current tab processed failed ,sent message %O',message);
-                        window.close();
+                        // window.close();
+                        port.onMessage.addListener((bgmsg)=>{
+                            console.log("Received background message %O, can close window now",bgmsg);
+                            window.close();
+                        });
                     }catch(err){
                         let retry = 0;
                         let retryInterval = setInterval(()=>{
@@ -487,9 +545,15 @@ function clear(){
                                 try{
                                     let retryPort = chrome.runtime.connect({name:'tab_'+tabId});
                                     retryPort.postMessage(message);
-                                    clearInterval(retryInterval);
-                                    console.log('tab %d: collected response successfully after retry ,sent message %O',tabId,message);
-                                    window.close();
+                                    retryPort.onMessage.addListener((bgmsg)=>{
+                                        console.log("Received background message %O",bgmsg);
+                                        clearInterval(retryInterval);
+                                        console.log('tab %d: collected response successfully after retry ,sent message %O',tabId,message);
+                                        window.close();
+                                    });
+                                    // clearInterval(retryInterval);
+                                    // console.log('tab %d: collected response successfully after retry ,sent message %O',tabId,message);
+                                    // window.close();
                                 } catch(e){
                                     retry++;
                                 }
@@ -538,10 +602,19 @@ function clear(){
                 let flag = notUsed? 'N':'Y';
                 const message = {accountId:accountId,ip:ip,tabId:tabId,used:flag,succeeded:true,rows:rows};
                 try{
+                    // port.postMessage(message);
+                    // console.log('tab %d: collected response successfully ,sent message %O',tabId,message);
+                    // // window.close();
+                    let port = chrome.runtime.connect({name:'tab_'+tabId});
                     port.postMessage(message);
                     console.log('tab %d: collected response successfully ,sent message %O',tabId,message);
-                    window.close();
+                    // window.close();
+                    port.onMessage.addListener((bgmsg)=>{
+                        console.log("Received background message %O, can close window now",bgmsg);
+                        window.close();
+                    });
                 }catch(err){
+                    console.warn("When sending message to backgroud occurred error %O, will retry",err);
                     let retry = 0;
                     let retryInterval = setInterval(()=>{
                         if(retry > 2){
@@ -551,10 +624,17 @@ function clear(){
                             try{
                                 let retryPort = chrome.runtime.connect({name:'tab_'+tabId});
                                 retryPort.postMessage(message);
-                                clearInterval(retryInterval);
-                                console.log('tab %d: collected response successfully after retry ,sent message %O',tabId,message);
-                                window.close();
+                                retryPort.onMessage.addListener((bgmsg)=>{
+                                    console.log("Received background message %O",bgmsg);
+                                    clearInterval(retryInterval);
+                                    console.log('tab %d: collected response successfully after retry ,sent message %O',tabId,message);
+                                    window.close();
+                                });
+                                // clearInterval(retryInterval);
+                                // console.log('tab %d: collected response successfully after retry ,sent message %O',tabId,message);
+                                // window.close();
                             } catch(e){
+                                console.warn("When retrying occurred error %O, will retry again",e);
                                 retry++;
                             }
                         }
@@ -634,23 +714,13 @@ function popAndSaveArrayToLocalStorage(listObj,objKey){
     return null;
 }
 
-async function getNonNegativeInt(int,objKey){
-    if(int > 0) return int;
-    let localInt = await chrome.storage.local.get(objKey);
-    if(localInt[objKey]){
-        try{
-            return parseInt(localInt[objKey]);
-        }catch(err){
-            log('WARN','background: when retrieving non-negative interger '+ localObj[objKey] +' from local storage occurred error '+err.message+',returned 0');
-            return 0;
-        }
-    }else{
-        return 0;
-    }
-}
+async function getObjFromLocalStorage(objKey){
 
-function saveNonNegativeInt(int,objKey){
-    let obj = new Object();
-    obj[objKey] = int;
-    chrome.storage.local.set(obj);
+    let localObj = await chrome.storage.local.get(objKey);
+    if(localObj[objKey]){
+        return localObj[objKey];
+    }else{
+        console.log('Key %O not existed',objKey);
+        return null;
+    }
 }
